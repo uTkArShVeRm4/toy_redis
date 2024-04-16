@@ -1,3 +1,6 @@
+use std::sync::{Arc, Mutex};
+use std::{collections::HashMap, str::FromStr};
+
 use tokio::net::{TcpListener, TcpStream};
 
 use anyhow::Result;
@@ -8,12 +11,16 @@ mod resp;
 #[tokio::main]
 async fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
+    let db: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new())); // Wrap HashMap in Arc<Mutex<_>>
+
     loop {
         let stream = listener.accept().await;
         match stream {
             Ok((stream, _)) => {
                 println!("Accepted new connection!");
-                tokio::spawn(async move { handle_conn(stream).await });
+                let db_clone = Arc::clone(&db); // Clone Arc
+                tokio::spawn(async move { handle_conn(stream, db_clone).await });
+                // Pass cloned Arc
             }
 
             Err(e) => {
@@ -23,7 +30,7 @@ async fn main() {
     }
 }
 
-async fn handle_conn(stream: TcpStream) {
+async fn handle_conn(stream: TcpStream, db: Arc<Mutex<HashMap<String, String>>>) {
     let mut handler = resp::RespHandler::new(stream);
 
     println!("Starting read loop");
@@ -38,7 +45,10 @@ async fn handle_conn(stream: TcpStream) {
             match command.as_str() {
                 "ping" => Value::SimpleString("PONG".to_string()),
                 "echo" => args.first().unwrap().clone(),
-                c => panic!("Cannont handle command {}", c),
+                "set" => set_function(args, &db),
+                "get" => get_function(args, &db),
+                "command" => Value::SimpleString("Ok".to_string()),
+                c => panic!("Cannot handle command {}", c),
             }
         } else {
             break;
@@ -47,6 +57,30 @@ async fn handle_conn(stream: TcpStream) {
         println!("Sending value {:?}", response);
 
         handler.write_value(response).await.unwrap();
+    }
+}
+
+fn set_function(args: Vec<Value>, db: &Arc<Mutex<HashMap<String, String>>>) -> Value {
+    if args.len() != 2 {
+        return Value::SimpleError(String::from_str("Unexpected number of arguments").unwrap());
+    }
+
+    let mut db = db.lock().unwrap(); // Lock the mutex to access the HashMap
+    db.insert(args[0].value(), args[1].value());
+
+    Value::SimpleString(String::from_str("Ok").unwrap())
+}
+
+fn get_function(args: Vec<Value>, db: &Arc<Mutex<HashMap<String, String>>>) -> Value {
+    if args.len() != 1 {
+        return Value::SimpleError(String::from_str("Unexpected number of arguments").unwrap());
+    }
+
+    let db = db.lock().unwrap(); // Lock the mutex to access the HashMap
+    let res = db.get(&args[0].value());
+    match res {
+        Some(item) => Value::BulkString(item.to_string()),
+        None => Value::NullBulk,
     }
 }
 
@@ -62,7 +96,7 @@ fn extract_command(value: Value) -> Result<(String, Vec<Value>)> {
 
 fn unpack_bulk_str(value: Value) -> Result<String> {
     match value {
-        Value::BulkString(s) => Ok(s),
+        Value::BulkString(s) => Ok(s.to_lowercase()),
         _ => Err(anyhow::anyhow!("Expected command to be a bulk string")),
     }
 }

@@ -10,7 +10,9 @@ use tokio::{
 #[derive(Debug, Clone)]
 pub enum Value {
     SimpleString(String),
+    SimpleError(String),
     BulkString(String),
+    NullBulk,
     Array(Vec<Value>),
 }
 
@@ -19,6 +21,16 @@ impl Value {
         match self {
             Value::SimpleString(s) => format!("+{}\r\n", s),
             Value::BulkString(s) => format!("${}\r\n{}\r\n", s.chars().count(), s),
+            Value::SimpleError(s) => format!("-{}\r\n", s),
+            Value::NullBulk => format!("$-1\r\n"),
+            _ => panic!("Unsupported value for serialize"),
+        }
+    }
+    pub fn value(&self) -> String {
+        match self {
+            Value::SimpleString(s) => s.to_string(),
+            Value::BulkString(s) => s.to_string(),
+            Value::SimpleError(s) => s.to_string(),
             _ => panic!("Unsupported value for serialize"),
         }
     }
