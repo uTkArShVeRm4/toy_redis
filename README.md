@@ -6,8 +6,7 @@ Toy redis runs a TCP server that `redis-cli` command can directly interface with
 
 Some commands implemented are:
 
-1. Ping
-2. Echo
-3. Set
-4. Set with expiration
-5. Get
+1. Ping ![ping](images/Ping.png)
+2. Echo ![echo](images/Echo.png)
+3. Set and Get ![set](images/Set.png)
+4. Set with expiration ![set-ex](images/Set-ex.png)
