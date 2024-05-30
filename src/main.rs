@@ -54,6 +54,7 @@ async fn handle_conn(stream: TcpStream, db: Arc<Mutex<HashMap<String, Entry>>>) 
                 "echo" => args.first().unwrap().clone(),
                 "set" => set_function(args, &db),
                 "get" => get_function(args, &db),
+                "dbsize" => dbsize_function(args, &db),
                 "command" => Value::SimpleString("Ok".to_string()),
                 c => panic!("Cannot handle command {}", c),
             }
@@ -134,6 +135,10 @@ fn get_function(args: Vec<Value>, db: &Arc<Mutex<HashMap<String, Entry>>>) -> Va
         }
         None => Value::NullBulk,
     }
+}
+
+fn dbsize_function(_args: Vec<Value>, db: &Arc<Mutex<HashMap<String, Entry>>>) -> Value {
+    Value::SimpleString(db.lock().unwrap().len().to_string())
 }
 
 fn extract_command(value: Value) -> Result<(String, Vec<Value>)> {
